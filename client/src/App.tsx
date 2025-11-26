@@ -28,7 +28,7 @@ function Router() {
       <Route path="/fight-ticket" component={FightTicket} />
       <Route path="/my-tickets" component={MyTickets} />
       <Route path="/admin/traffic-tickets" component={AdminTrafficTickets} />
-      <Route path="/zade-training" component={ZADETraining} />>
+      <Route path="/zade-training" component={ZADETraining} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
