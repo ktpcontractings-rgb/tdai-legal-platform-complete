@@ -8,10 +8,12 @@ import * as db from "./db";
 import { consultations, managementAgents, agentDecisions } from "../drizzle/schema";
 // Voice features removed
 import { voiceConsultationRouter } from "./voice-consultation";
+import { trafficTicketRouter } from "./traffic-tickets";
 
 export const appRouter = router({
   system: systemRouter,
   voiceConsultation: voiceConsultationRouter,
+  trafficTickets: trafficTicketRouter,
   
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),

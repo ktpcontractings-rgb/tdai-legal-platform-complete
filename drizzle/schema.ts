@@ -313,3 +313,97 @@ export const agentKnowledgeFreshness = mysqlTable("agent_knowledge_freshness", {
 });
 
 export type AgentKnowledgeFreshness = typeof agentKnowledgeFreshness.$inferSelect;
+
+
+// ============================================================================
+// TRAFFIC TICKET SYSTEM (PAY-PER-TICKET MVP)
+// ============================================================================
+
+/**
+ * User ticket credits - pay-per-use model for traffic ticket consultations
+ */
+export const userTicketCredits = mysqlTable("user_ticket_credits", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  balance: int("balance").default(0).notNull(),
+  totalPurchased: int("totalPurchased").default(0).notNull(),
+  totalUsed: int("totalUsed").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type UserTicketCredit = typeof userTicketCredits.$inferSelect;
+export type InsertUserTicketCredit = typeof userTicketCredits.$inferInsert;
+
+/**
+ * Traffic ticket credit purchases
+ */
+export const ticketPurchases = mysqlTable("ticket_purchases", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  userId: int("userId").notNull(),
+  credits: int("credits").notNull(),
+  amount: int("amount").notNull(), // Amount in cents
+  stripePaymentId: varchar("stripePaymentId", { length: 128 }),
+  stripeSessionId: varchar("stripeSessionId", { length: 128 }),
+  status: mysqlEnum("status", ["pending", "completed", "failed", "refunded"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TicketPurchase = typeof ticketPurchases.$inferSelect;
+export type InsertTicketPurchase = typeof ticketPurchases.$inferInsert;
+
+/**
+ * Traffic ticket details - extends consultations for traffic-specific data
+ */
+export const trafficTickets = mysqlTable("traffic_tickets", {
+  id: int("id").autoincrement().primaryKey(),
+  consultationId: varchar("consultationId", { length: 64 }).notNull(),
+  userId: int("userId").notNull(),
+  ticketNumber: varchar("ticketNumber", { length: 128 }).notNull(),
+  violationType: mysqlEnum("violationType", [
+    "SPEEDING", "RED_LIGHT", "STOP_SIGN", "PARKING", 
+    "CARELESS_DRIVING", "RECKLESS_DRIVING", "DUI_DWI",
+    "LICENSE_ISSUE", "REGISTRATION_ISSUE", "OTHER"
+  ]).notNull(),
+  issueDate: timestamp("issueDate").notNull(),
+  location: text("location").notNull(),
+  fineAmount: decimal("fineAmount", { precision: 10, scale: 2 }).notNull(),
+  courtDate: timestamp("courtDate"),
+  officerName: varchar("officerName", { length: 256 }),
+  description: text("description").notNull(),
+  photoUrl: text("photoUrl"), // Photo of the ticket
+  status: mysqlEnum("status", ["submitted", "under_review", "strategy_ready", "in_progress", "resolved", "closed"]).default("submitted").notNull(),
+  assignedAgentId: varchar("assignedAgentId", { length: 64 }),
+  strategyDocument: text("strategyDocument"), // AI-generated defense strategy
+  outcome: text("outcome"), // Final result
+  savingsAmount: decimal("savingsAmount", { precision: 10, scale: 2 }), // How much we saved them
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+});
+
+export type TrafficTicket = typeof trafficTickets.$inferSelect;
+export type InsertTrafficTicket = typeof trafficTickets.$inferInsert;
+
+/**
+ * Management team discussions about traffic tickets
+ * Connects to existing agent_communications but specific to ticket workflow
+ */
+export const ticketManagementDiscussions = mysqlTable("ticket_management_discussions", {
+  id: int("id").autoincrement().primaryKey(),
+  ticketId: int("ticketId").notNull(),
+  fromAgentId: varchar("fromAgentId", { length: 64 }).notNull(),
+  toAgentId: varchar("toAgentId", { length: 64 }), // null for broadcast to all
+  message: text("message").notNull(),
+  messageType: mysqlEnum("messageType", [
+    "assignment", "strategy_discussion", "status_update", 
+    "approval_request", "resolution", "escalation"
+  ]).default("strategy_discussion").notNull(),
+  priority: mysqlEnum("priority", ["low", "medium", "high", "urgent"]).default("medium").notNull(),
+  requiresResponse: boolean("requiresResponse").default(false),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TicketManagementDiscussion = typeof ticketManagementDiscussions.$inferSelect;
+export type InsertTicketManagementDiscussion = typeof ticketManagementDiscussions.$inferInsert;

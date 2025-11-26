@@ -15,6 +15,14 @@ import {
   consultations,
   businessMetrics,
   auditLogs,
+  userTicketCredits,
+  ticketPurchases,
+  trafficTickets,
+  ticketManagementDiscussions,
+  InsertUserTicketCredit,
+  InsertTicketPurchase,
+  InsertTrafficTicket,
+  InsertTicketManagementDiscussion,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -384,4 +392,133 @@ export async function getAuditLogs(entityId?: string, limit = 100) {
   return await db.select().from(auditLogs)
     .orderBy(desc(auditLogs.timestamp))
     .limit(limit);
+}
+
+
+// ============================================================================
+// TRAFFIC TICKET SYSTEM
+// ============================================================================
+
+export async function getUserTicketCredits(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(userTicketCredits).where(eq(userTicketCredits.userId, userId)).limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function createOrUpdateTicketCredits(userId: number, creditsToAdd: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const existing = await getUserTicketCredits(userId);
+  if (existing) {
+    await db.update(userTicketCredits)
+      .set({
+        balance: existing.balance + creditsToAdd,
+        totalPurchased: existing.totalPurchased + creditsToAdd,
+        updatedAt: new Date(),
+      })
+      .where(eq(userTicketCredits.userId, userId));
+  } else {
+    await db.insert(userTicketCredits).values({
+      userId,
+      balance: creditsToAdd,
+      totalPurchased: creditsToAdd,
+      totalUsed: 0,
+    });
+  }
+}
+
+export async function deductTicketCredit(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const credits = await getUserTicketCredits(userId);
+  if (!credits || credits.balance < 1) {
+    throw new Error("Insufficient credits");
+  }
+  
+  await db.update(userTicketCredits)
+    .set({
+      balance: credits.balance - 1,
+      totalUsed: credits.totalUsed + 1,
+      updatedAt: new Date(),
+    })
+    .where(eq(userTicketCredits.userId, userId));
+}
+
+export async function createTrafficTicket(ticket: Omit<InsertTrafficTicket, 'consultationId'>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const consultationId = `TICKET-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  const result = await db.insert(trafficTickets).values({
+    ...ticket,
+    consultationId,
+  });
+  
+  return result[0]?.insertId || 0;
+}
+
+export async function getUserTrafficTickets(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(trafficTickets).where(eq(trafficTickets.userId, userId)).orderBy(desc(trafficTickets.createdAt));
+}
+
+export async function getAllTrafficTickets() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(trafficTickets).orderBy(desc(trafficTickets.createdAt));
+}
+
+export async function updateTrafficTicketStatus(
+  ticketId: number,
+  status: "submitted" | "under_review" | "strategy_ready" | "in_progress" | "resolved" | "closed"
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const updateData: any = { status, updatedAt: new Date() };
+  if (status === "resolved" || status === "closed") {
+    updateData.resolvedAt = new Date();
+  }
+  
+  await db.update(trafficTickets).set(updateData).where(eq(trafficTickets.id, ticketId));
+}
+
+export async function getTicketManagementDiscussions(ticketId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(ticketManagementDiscussions)
+    .where(eq(ticketManagementDiscussions.ticketId, ticketId))
+    .orderBy(desc(ticketManagementDiscussions.createdAt));
+}
+
+export async function getAllTicketManagementDiscussions() {
+  const db = await getDb();
+  if (!db) return [];
+  return await db.select().from(ticketManagementDiscussions).orderBy(desc(ticketManagementDiscussions.createdAt));
+}
+
+export async function createTicketManagementDiscussion(discussion: InsertTicketManagementDiscussion) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(ticketManagementDiscussions).values(discussion);
+}
+
+export async function notifyManagementTeam(ticketId: number, violationType: string) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.insert(ticketManagementDiscussions).values({
+    ticketId,
+    fromAgentId: "SYSTEM",
+    toAgentId: "SIGMA-1",
+    message: `New ${violationType} ticket submitted. Ticket ID: ${ticketId}. Requires assignment and strategy development.`,
+    messageType: "assignment",
+    priority: violationType === "DUI_DWI" || violationType === "RECKLESS_DRIVING" ? "urgent" : "high",
+    requiresResponse: true,
+  });
 }

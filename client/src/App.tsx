@@ -9,16 +9,26 @@ import Agents from "./pages/Agents";
 import Dashboard from "./pages/Dashboard";
 import SigmaHub from "./pages/SigmaHub";
 import CEODashboard from "./pages/CEODashboard";
+import BuyTickets from "./pages/BuyTickets";
+import FightTicket from "./pages/FightTicket";
+import MyTickets from "./pages/MyTickets";
+import AdminTrafficTickets from "./pages/AdminTrafficTickets";
+import ZADETraining from "./pages/ZADETraining";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
+       <Route path="/" component={Home} />
       <Route path="/agents" component={Agents} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/sigma-hub" component={SigmaHub} />
       <Route path="/ceo-dashboard" component={CEODashboard} />
+      <Route path="/buy-tickets" component={BuyTickets} />
+      <Route path="/fight-ticket" component={FightTicket} />
+      <Route path="/my-tickets" component={MyTickets} />
+      <Route path="/admin/traffic-tickets" component={AdminTrafficTickets} />
+      <Route path="/zade-training" component={ZADETraining} />>
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
