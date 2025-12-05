@@ -281,8 +281,7 @@ export async function generateRAGResponse(
     // Build context from retrieved knowledge
     const ragContext = buildRAGContext(relevantKnowledge);
     
-    // Construct system
- prompt with RAG context
+    // Construct system prompt with RAG context
     const systemPrompt = `You are a ${agentRole} for TDAI Legal Platform with world-class Fortune 500 expertise.
 
 Your mission: Scale TDAI from pre-seed to nationwide unicorn ($1B valuation in 3 years) as the first single-employee unicorn.
