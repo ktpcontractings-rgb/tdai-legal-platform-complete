@@ -71,7 +71,8 @@ export const legalAgents = mysqlTable("legal_agents", {
   name: text("name").notNull(),
   specialization: mysqlEnum("specialization", [
     "TRAFFIC", "FAMILY", "CORPORATE", "CRIMINAL", "BENEFITS", 
-    "IMMIGRATION", "REAL_ESTATE", "EMPLOYMENT", "PERSONAL_INJURY"
+    "IMMIGRATION", "REAL_ESTATE", "EMPLOYMENT", "PERSONAL_INJURY",
+    "INTELLECTUAL_PROPERTY"
   ]).notNull(),
   title: text("title").notNull(),
   description: text("description"),

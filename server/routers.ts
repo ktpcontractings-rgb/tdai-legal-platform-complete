@@ -302,6 +302,78 @@ export const appRouter = router({
   }),
 
   // ============================================================================
+  // STRIPE PAYMENTS
+  // ============================================================================
+  payments: router({
+    // Create checkout session for subscription
+    createSubscriptionCheckout: protectedProcedure
+      .input(z.object({
+        priceId: z.string(),
+        successUrl: z.string(),
+        cancelUrl: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { createSubscriptionCheckout } = await import("./stripe-config");
+        const session = await createSubscriptionCheckout(
+          ctx.user.id,
+          input.priceId,
+          input.successUrl,
+          input.cancelUrl
+        );
+        return { sessionId: session.id, url: session.url };
+      }),
+
+    // Create checkout session for one-time payment
+    createOneTimeCheckout: protectedProcedure
+      .input(z.object({
+        priceId: z.string(),
+        successUrl: z.string(),
+        cancelUrl: z.string(),
+        metadata: z.record(z.string()).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { createOneTimeCheckout } = await import("./stripe-config");
+        const session = await createOneTimeCheckout(
+          ctx.user.id,
+          input.priceId,
+          input.successUrl,
+          input.cancelUrl,
+          input.metadata
+        );
+        return { sessionId: session.id, url: session.url };
+      }),
+
+    // Get pricing tiers
+    getPricingTiers: publicProcedure.query(async () => {
+      const { PRICING_TIERS, ONE_TIME_SERVICES } = await import("./stripe-config");
+      return {
+        subscriptions: PRICING_TIERS,
+        oneTime: ONE_TIME_SERVICES,
+      };
+    }),
+
+    // Create customer portal session
+    createPortalSession: protectedProcedure
+      .input(z.object({
+        returnUrl: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // Get user's subscription to find customer ID
+        const subscription = await db.getUserSubscription(ctx.user.id);
+        if (!subscription?.stripeCustomerId) {
+          throw new Error("No active subscription found");
+        }
+
+        const { createCustomerPortalSession } = await import("./stripe-config");
+        const session = await createCustomerPortalSession(
+          subscription.stripeCustomerId,
+          input.returnUrl
+        );
+        return { url: session.url };
+      }),
+  }),
+
+  // ============================================================================
   // CEO CHAT - Strategic directives to management agents
   // ============================================================================
   ceoChat: router({    

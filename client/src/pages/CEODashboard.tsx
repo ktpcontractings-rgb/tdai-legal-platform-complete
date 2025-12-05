@@ -42,33 +42,20 @@ export default function CEODashboard() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
 
-  // Mock pending approvals
-  const pendingApprovals = [
-    {
-      id: 1,
-      title: "Deploy 3 New Michigan Traffic Law Specialists",
-      description: "ZADE has completed training for 3 new traffic law specialists focused on Michigan Vehicle Code and ready for deployment in Detroit, Grand Rapids, and Ann Arbor regions.",
-      priority: "high",
-      requestedBy: "ZADE Trainer",
-      timestamp: "2 hours ago"
-    },
-    {
-      id: 2,
-      title: "Increase Marketing Budget by 15%",
-      description: "Marketing AI recommends budget increase to capture Q2 growth opportunity in corporate legal services sector.",
-      priority: "medium",
-      requestedBy: "Marketing AI",
-      timestamp: "5 hours ago"
-    },
-    {
-      id: 3,
-      title: "New Compliance Protocol for Healthcare Agents",
-      description: "Regulatory Board proposes enhanced compliance protocols for healthcare-related legal consultations.",
-      priority: "high",
-      requestedBy: "Regulatory Board",
-      timestamp: "1 day ago"
-    }
-  ];
+  // Get real pending approvals from database
+  const pendingApprovals = pendingDecisions || [];
+  
+  // Helper to format timestamp
+  const formatTimestamp = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - new Date(date).getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
+    if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    return 'Just now';
+  };
 
   const handleSendDirective = async () => {
     if (!directive.trim()) {
@@ -94,12 +81,30 @@ export default function CEODashboard() {
     }
   };
 
-  const handleApprove = (id: number, title: string) => {
-    toast.success(`Approved: ${title}`);
+  const approveDecisionMutation = trpc.decisions.approve.useMutation();
+  const rejectDecisionMutation = trpc.decisions.reject.useMutation();
+  const { data: pendingDecisions, refetch: refetchDecisions } = trpc.decisions.pending.useQuery();
+
+  const handleApprove = async (decisionId: string, title: string) => {
+    try {
+      await approveDecisionMutation.mutateAsync({ decisionId });
+      toast.success(`Approved: ${title}`);
+      await refetchDecisions();
+    } catch (error) {
+      toast.error("Failed to approve decision");
+      console.error(error);
+    }
   };
 
-  const handleReject = (id: number, title: string) => {
-    toast.error(`Rejected: ${title}`);
+  const handleReject = async (decisionId: string, title: string) => {
+    try {
+      await rejectDecisionMutation.mutateAsync({ decisionId });
+      toast.error(`Rejected: ${title}`);
+      await refetchDecisions();
+    } catch (error) {
+      toast.error("Failed to reject decision");
+      console.error(error);
+    }
   };
 
   const agentColors = {
@@ -382,29 +387,29 @@ export default function CEODashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {pendingApprovals.map((approval) => (
+              {pendingApprovals.length > 0 ? pendingApprovals.map((approval) => (
                 <Card key={approval.id} className="bg-slate-950/50 border-slate-700">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-lg font-semibold text-white">{approval.title}</h3>
+                          <h3 className="text-lg font-semibold text-white">{approval.decision}</h3>
                           <Badge 
                             className={
-                              approval.priority === "high" 
+                              approval.priority === "high" || approval.priority === "critical"
                                 ? "bg-red-500/20 text-red-400 border-red-500"
                                 : "bg-yellow-500/20 text-yellow-400 border-yellow-500"
                             }
                           >
-                            {approval.priority === "high" ? <AlertCircle className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
+                            {(approval.priority === "high" || approval.priority === "critical") ? <AlertCircle className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
                             {approval.priority.toUpperCase()}
                           </Badge>
                         </div>
-                        <p className="text-slate-300 text-sm mb-2">{approval.description}</p>
+                        <p className="text-slate-300 text-sm mb-2">{approval.description || approval.recommendation}</p>
                         <div className="flex items-center gap-4 text-xs text-slate-500">
-                          <span>Requested by: {approval.requestedBy}</span>
+                          <span>Requested by: Agent {approval.agentId.substring(0, 8)}</span>
                           <span>•</span>
-                          <span>{approval.timestamp}</span>
+                          <span>{formatTimestamp(approval.createdAt)}</span>
                         </div>
                       </div>
                     </div>
@@ -412,7 +417,8 @@ export default function CEODashboard() {
                       <Button
                         size="sm"
                         className="bg-green-500 hover:bg-green-600 text-white"
-                        onClick={() => handleApprove(approval.id, approval.title)}
+                        onClick={() => handleApprove(approval.id, approval.decision)}
+                        disabled={approveDecisionMutation.isLoading}
                       >
                         <ThumbsUp className="h-4 w-4 mr-1" />
                         Approve
@@ -421,7 +427,8 @@ export default function CEODashboard() {
                         size="sm"
                         variant="outline"
                         className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-                        onClick={() => handleReject(approval.id, approval.title)}
+                        onClick={() => handleReject(approval.id, approval.decision)}
+                        disabled={rejectDecisionMutation.isLoading}
                       >
                         <ThumbsDown className="h-4 w-4 mr-1" />
                         Reject
@@ -429,7 +436,12 @@ export default function CEODashboard() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              )) : (
+                <div className="text-center py-8 text-slate-400">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>No pending approvals - all caught up!</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
