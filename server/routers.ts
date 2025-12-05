@@ -440,9 +440,9 @@ export const appRouter = router({
           content: msg.message,
         }));
 
-        // Generate agent response using their specific knowledge base
-        const { getAgentResponse } = await import("./agent-knowledge");
-        const agentResponse = await getAgentResponse(
+        // Generate RAG-enhanced agent response using their specific knowledge base
+        const { generateRAGResponse } = await import("./rag-vector-store");
+        const agentResponse = await generateRAGResponse(
           agentId,
           targetRole,
           input.message,
