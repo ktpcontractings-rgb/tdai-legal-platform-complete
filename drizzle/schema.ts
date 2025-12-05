@@ -132,11 +132,13 @@ export type AgentDecision = typeof agentDecisions.$inferSelect;
 
 export const knowledgeDocuments = mysqlTable("knowledge_documents", {
   id: varchar("id", { length: 64 }).primaryKey(),
+  agentId: varchar("agentId", { length: 64 }).notNull(), // Each agent has their own knowledge base
   title: text("title").notNull(),
   content: text("content").notNull(),
-  category: mysqlEnum("category", ["curriculum", "case_study", "legal_update", "training"]).notNull(),
-  targetRole: varchar("targetRole", { length: 64 }),
-  vectorId: varchar("vectorId", { length: 128 }), // Pinecone vector ID
+  category: mysqlEnum("category", ["curriculum", "case_study", "legal_update", "training", "strategy", "technical", "market_research"]).notNull(),
+  sourceType: mysqlEnum("sourceType", ["manual", "learned", "imported", "generated"]).default("manual").notNull(),
+  vectorId: varchar("vectorId", { length: 128 }), // Pinecone vector ID for semantic search
+  importance: int("importance").default(5), // 1-10 scale for knowledge prioritization
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -407,3 +409,19 @@ export const ticketManagementDiscussions = mysqlTable("ticket_management_discuss
 
 export type TicketManagementDiscussion = typeof ticketManagementDiscussions.$inferSelect;
 export type InsertTicketManagementDiscussion = typeof ticketManagementDiscussions.$inferInsert;
+
+// ============================================================================
+// CEO DASHBOARD CHAT
+// ============================================================================
+
+export const ceoChatMessages = mysqlTable("ceo_chat_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(), // CEO/user who sent the message
+  message: text("message").notNull(),
+  role: mysqlEnum("role", ["user", "assistant"]).notNull(), // user = CEO, assistant = SIGMA
+  agentId: varchar("agentId", { length: 64 }), // Which agent responded (SIGMA, CEO, etc.)
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export type CeoChatMessage = typeof ceoChatMessages.$inferSelect;
+export type InsertCeoChatMessage = typeof ceoChatMessages.$inferInsert;

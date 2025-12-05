@@ -5,7 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import * as db from "./db";
-import { consultations, managementAgents, agentDecisions } from "../drizzle/schema";
+import { consultations, managementAgents, agentDecisions, ceoChatMessages } from "../drizzle/schema";
 // Voice features removed
 import { voiceConsultationRouter } from "./voice-consultation";
 import { trafficTicketRouter } from "./traffic-tickets";
@@ -299,6 +299,119 @@ export const appRouter = router({
     list: publicProcedure.query(async () => {
       return await db.getAllRegulatoryBoardMembers();
     }),
+  }),
+
+  // ============================================================================
+  // CEO CHAT - Strategic directives to management agents
+  // ============================================================================
+  ceoChat: router({    
+    // Get chat history
+    getHistory: protectedProcedure.query(async ({ ctx }) => {
+      const dbInstance = await db.getDb();
+      if (!dbInstance) throw new Error("Database not available");
+      
+      const { eq, desc } = await import("drizzle-orm");
+      const messages = await dbInstance
+        .select()
+        .from(ceoChatMessages)
+        .where(eq(ceoChatMessages.userId, ctx.user.id))
+        .orderBy(desc(ceoChatMessages.timestamp))
+        .limit(50);
+      
+      return messages.reverse(); // Return oldest first
+    }),
+
+    // Send message to a specific management agent
+    sendMessage: protectedProcedure
+      .input(z.object({ 
+        message: z.string(),
+        targetAgent: z.enum(["CEO", "CTO", "PM", "MARKETING", "BILLING", "LEGAL"]).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const dbInstance = await db.getDb();
+        if (!dbInstance) throw new Error("Database not available");
+
+        // Save user message
+        await dbInstance.insert(ceoChatMessages).values({
+          userId: ctx.user.id,
+          message: input.message,
+          role: "user",
+          timestamp: new Date(),
+        });
+
+        // Determine which agent to respond (default to CEO agent)
+        const targetRole = input.targetAgent || "CEO";
+        
+        // Get the management agent
+        const { eq } = await import("drizzle-orm");
+        const agents = await dbInstance
+          .select()
+          .from(managementAgents)
+          .where(eq(managementAgents.role, targetRole))
+          .limit(1);
+
+        let agentId = "SIGMA"; // Fallback
+        if (agents.length > 0) {
+          agentId = agents[0].id;
+        }
+
+        // Get conversation history for context
+        const recentMessages = await dbInstance
+          .select()
+          .from(ceoChatMessages)
+          .where(eq(ceoChatMessages.userId, ctx.user.id))
+          .orderBy(desc(ceoChatMessages.timestamp))
+          .limit(10);
+
+        const conversationHistory = recentMessages.reverse().map(msg => ({
+          role: msg.role,
+          content: msg.message,
+        }));
+
+        // Generate agent response using their specific knowledge base
+        const { getAgentResponse } = await import("./agent-knowledge");
+        const agentResponse = await getAgentResponse(
+          agentId,
+          targetRole,
+          input.message,
+          conversationHistory
+        );
+
+        // Save agent response
+        await dbInstance.insert(ceoChatMessages).values({
+          userId: ctx.user.id,
+          message: agentResponse,
+          role: "assistant",
+          agentId,
+          timestamp: new Date(),
+        });
+
+        // Log audit
+        await db.logAudit(
+          "ceo_chat",
+          ctx.user.id.toString(),
+          "message_sent",
+          ctx.user.id.toString(),
+          `CEO sent message to ${targetRole}: ${input.message.substring(0, 100)}`
+        );
+
+        return {
+          userMessage: input.message,
+          agentResponse,
+          respondingAgent: targetRole,
+        };
+      }),
+
+    // Initialize knowledge base for an agent
+    initializeAgentKnowledge: protectedProcedure
+      .input(z.object({
+        agentId: z.string(),
+        role: z.enum(["CEO", "CTO", "PM", "MARKETING", "BILLING", "LEGAL"]),
+      }))
+      .mutation(async ({ input }) => {
+        const { initializeAgentKnowledge } = await import("./agent-knowledge");
+        return await initializeAgentKnowledge(input.agentId, input.role);
+      }),
   }),
 });
 

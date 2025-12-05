@@ -18,31 +18,22 @@ import {
   Send,
   ThumbsUp,
   ThumbsDown,
-  Loader2,
-  MessageSquare
+  Loader2
 } from "lucide-react";
 import { Link } from "wouter";
-import { useState, useEffect, useRef } from "react";
+import { APP_TITLE } from "@/const";
+import { useState } from "react";
 import { toast } from "sonner";
 
 export default function CEODashboard() {
   const { user } = useAuth();
   const [directive, setDirective] = useState("");
-  const [selectedAgent, setSelectedAgent] = useState<"CEO" | "CTO" | "PM" | "MARKETING" | "BILLING" | "LEGAL">("CEO");
-  const [isSending, setIsSending] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  
   const { data: stats } = trpc.legalAgents.getStats.useQuery();
   const { data: managementAgents } = trpc.managementAgents.list.useQuery();
-  const { data: chatHistory, refetch: refetchChat } = trpc.ceoChat.getHistory.useQuery();
-  const sendMessageMutation = trpc.ceoChat.sendMessage.useMutation();
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
+  const ceoAgent = managementAgents?.find(a => a.role === "CEO");
 
-  // Mock pending approvals
+  // Mock pending approvals - in real system this would come from database
   const pendingApprovals = [
     {
       id: 1,
@@ -70,28 +61,14 @@ export default function CEODashboard() {
     }
   ];
 
-  const handleSendDirective = async () => {
+  const handleSendDirective = () => {
     if (!directive.trim()) {
-      toast.error("Please enter a message");
+      toast.error("Please enter a directive");
       return;
     }
     
-    setIsSending(true);
-    try {
-      await sendMessageMutation.mutateAsync({
-        message: directive,
-        targetAgent: selectedAgent,
-      });
-      
-      setDirective("");
-      await refetchChat();
-      toast.success(`Message sent to ${selectedAgent}`);
-    } catch (error) {
-      toast.error("Failed to send message");
-      console.error(error);
-    } finally {
-      setIsSending(false);
-    }
+    toast.success("Directive sent to SIGMA for execution");
+    setDirective("");
   };
 
   const handleApprove = (id: number, title: string) => {
@@ -100,15 +77,6 @@ export default function CEODashboard() {
 
   const handleReject = (id: number, title: string) => {
     toast.error(`Rejected: ${title}`);
-  };
-
-  const agentColors = {
-    CEO: "bg-amber-500/20 text-amber-400 border-amber-500",
-    CTO: "bg-cyan-500/20 text-cyan-400 border-cyan-500",
-    PM: "bg-purple-500/20 text-purple-400 border-purple-500",
-    MARKETING: "bg-pink-500/20 text-pink-400 border-pink-500",
-    BILLING: "bg-green-500/20 text-green-400 border-green-500",
-    LEGAL: "bg-blue-500/20 text-blue-400 border-blue-500",
   };
 
   return (
@@ -144,7 +112,7 @@ export default function CEODashboard() {
             Welcome, {user?.name?.split(' ')[0] || "Chief"} 👔
           </h2>
           <p className="text-slate-300">
-            Your AI management team awaits your strategic direction. Each agent has their own specialized knowledge base.
+            Your AI empire awaits your strategic direction. SIGMA is coordinating all operations.
           </p>
         </div>
 
@@ -198,107 +166,35 @@ export default function CEODashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Chat with Management Agents */}
+          {/* Strategic Directive Panel */}
           <Card className="bg-gradient-to-br from-amber-900/20 to-slate-900/50 border-amber-500/30">
             <CardHeader>
               <div className="flex items-center gap-2 mb-2">
-                <MessageSquare className="h-6 w-6 text-amber-400" />
-                <CardTitle className="text-2xl text-white">Boardroom Chat</CardTitle>
+                <Send className="h-6 w-6 text-amber-400" />
+                <CardTitle className="text-2xl text-white">Send Strategic Directive</CardTitle>
               </div>
               <CardDescription className="text-slate-300">
-                Communicate with your AI management team - each with their own specialized knowledge
+                Give high-level instructions to SIGMA - it will coordinate execution across all systems
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {/* Agent Selector */}
-              <div className="flex flex-wrap gap-2 mb-4">
-                {(["CEO", "CTO", "PM", "MARKETING", "BILLING", "LEGAL"] as const).map((agent) => (
-                  <Button
-                    key={agent}
-                    size="sm"
-                    variant={selectedAgent === agent ? "default" : "outline"}
-                    className={selectedAgent === agent ? agentColors[agent] : ""}
-                    onClick={() => setSelectedAgent(agent)}
-                  >
-                    {agent}
-                  </Button>
-                ))}
-              </div>
-
-              {/* Chat History */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 mb-4 h-[300px] overflow-y-auto">
-                {chatHistory && chatHistory.length > 0 ? (
-                  <div className="space-y-3">
-                    {chatHistory.map((msg, idx) => (
-                      <div
-                        key={idx}
-                        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[80%] rounded-lg p-3 ${
-                            msg.role === "user"
-                              ? "bg-amber-500/20 text-white"
-                              : "bg-slate-800 text-slate-200"
-                          }`}
-                        >
-                          {msg.role === "assistant" && msg.agentId && (
-                            <div className="text-xs text-slate-400 mb-1">
-                              {msg.agentId}
-                            </div>
-                          )}
-                          <div className="text-sm whitespace-pre-wrap">{msg.message}</div>
-                          <div className="text-xs text-slate-500 mt-1">
-                            {new Date(msg.timestamp).toLocaleTimeString()}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={chatEndRef} />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-slate-500">
-                    <div className="text-center">
-                      <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>No messages yet. Start a conversation with your management team!</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Message Input */}
               <Textarea
-                placeholder={`Ask ${selectedAgent} for strategic guidance...`}
-                className="min-h-[80px] bg-slate-900/50 border-amber-500/30 text-white placeholder:text-slate-500 mb-3"
+                placeholder="Example: Focus on expanding corporate legal services in the Northeast region..."
+                className="min-h-[120px] bg-slate-900/50 border-amber-500/30 text-white placeholder:text-slate-500 mb-4"
                 value={directive}
                 onChange={(e) => setDirective(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendDirective();
-                  }
-                }}
               />
               <Button 
                 className="w-full bg-amber-500 hover:bg-amber-600 text-white"
                 onClick={handleSendDirective}
-                disabled={isSending || !directive.trim()}
               >
-                {isSending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Send to {selectedAgent}
-                  </>
-                )}
+                <Send className="mr-2 h-4 w-4" />
+                Send to SIGMA
               </Button>
-              <div className="mt-3 p-3 bg-slate-900/50 rounded-lg border border-cyan-500/20">
-                <div className="flex items-center gap-2 text-xs text-cyan-400">
+              <div className="mt-4 p-3 bg-slate-900/50 rounded-lg border border-cyan-500/20">
+                <div className="flex items-center gap-2 text-sm text-cyan-400">
                   <Zap className="h-4 w-4" />
-                  <span>Each agent has their own specialized knowledge base and expertise</span>
+                  <span>SIGMA will coordinate with ZADE, Regulatory Board, and Special Agents</span>
                 </div>
               </div>
             </CardContent>
@@ -353,11 +249,11 @@ export default function CEODashboard() {
                 <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
                   <div className="flex items-center gap-2">
                     <Users className="h-5 w-5 text-cyan-400" />
-                    <span className="text-white">Management Agents</span>
+                    <span className="text-white">Special Agents</span>
                   </div>
                   <Badge className="bg-green-500/20 text-green-400">
                     <CheckCircle className="h-3 w-3 mr-1" />
-                    6 Active
+                    {stats?.activeAgents || 5} Active
                   </Badge>
                 </div>
               </div>
@@ -366,7 +262,7 @@ export default function CEODashboard() {
         </div>
 
         {/* Pending Approvals */}
-        <Card className="bg-slate-900/50 border-slate-800 mb-6">
+        <Card className="bg-slate-900/50 border-slate-800">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -433,6 +329,79 @@ export default function CEODashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Management Team */}
+        <Card className="bg-slate-900/50 border-slate-800 mt-6">
+          <CardHeader>
+            <CardTitle className="text-2xl text-white">Management Team</CardTitle>
+            <CardDescription className="text-slate-300">
+              Your AI leadership team coordinating all operations
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {managementAgents?.map(agent => (
+                <Card key={agent.id} className="bg-slate-800/50 border-slate-700">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="text-3xl">{agent.avatar}</div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-white">{agent.name}</h4>
+                        <p className="text-xs text-slate-400 mb-2">{agent.title}</p>
+                        <Badge className="bg-green-500/20 text-green-400 text-xs">
+                          {agent.status}
+                        </Badge>
+                        <p className="text-sm text-slate-300 mt-2 line-clamp-3">
+                          {agent.description}
+                        </p>
+                        {agent.recommendation && (
+                          <div className="mt-3 p-2 bg-cyan-500/10 border border-cyan-500/30 rounded">
+                            <p className="text-xs text-cyan-300">
+                              <strong>Latest:</strong> {agent.recommendation}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+          <Link href="/sigma-hub">
+            <Card className="bg-slate-900/50 border-cyan-500/30 hover:border-cyan-500 transition-all cursor-pointer">
+              <CardContent className="p-6">
+                <Zap className="h-8 w-8 text-cyan-400 mb-3" />
+                <h3 className="text-lg font-semibold text-white mb-2">SIGMA Hub</h3>
+                <p className="text-sm text-slate-400">View central coordination system</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/zade-trainer">
+            <Card className="bg-slate-900/50 border-purple-500/30 hover:border-purple-500 transition-all cursor-pointer">
+              <CardContent className="p-6">
+                <Brain className="h-8 w-8 text-purple-400 mb-3" />
+                <h3 className="text-lg font-semibold text-white mb-2">ZADE Trainer</h3>
+                <p className="text-sm text-slate-400">Monitor agent training progress</p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/regulatory-board">
+            <Card className="bg-slate-900/50 border-blue-500/30 hover:border-blue-500 transition-all cursor-pointer">
+              <CardContent className="p-6">
+                <Shield className="h-8 w-8 text-blue-400 mb-3" />
+                <h3 className="text-lg font-semibold text-white mb-2">Regulatory Board</h3>
+                <p className="text-sm text-slate-400">Review compliance reports</p>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
       </div>
     </div>
   );
